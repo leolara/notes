@@ -25,9 +25,11 @@ The main elements are:
 
 It is important to note that if the prover and validator have agreed on the setup will have the same proving and validation keys, and will not have to trust each other.
 
+![[zkp-process-diagram.png]]
+
 ## What is a ZKP arithmetization?
 
-An arithmetization is the way to represent the setup to the proving system. They are very low level and based on polynomials. As a simil, if the proving system is a CPU, the arithmetization is its machine code.
+An arithmetization is the way to represent the setup to the proving system. They are very low level and based on polynomials. As a simile, if the proving system is a CPU, the arithmetization is its machine code.
 
 ## What is a ZKP low-level DSL?
 
