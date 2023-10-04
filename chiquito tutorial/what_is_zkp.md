@@ -7,7 +7,7 @@ Zero Knowledge proofs (or ZKP) allow developers to create mathematical proofs th
 There are three main areas of application:
  + Privacy: because not all data has to be reveal we can proof computations and facts while preserving privacy or secrecy of some part of the data.
  + Scalability and verified computation: usually to check that a computation has been executed correctly you would need to execute it and check the results are the same. With ZKP you can validate the mathematical proof of the computation, and in some systems this could require less time and space resources than executing the computation itself.
- + Interoperability and trustlessness: because ZKPs are based on mathematical proofs, an organisation or individual can trust a ZKP proof without trusting others.
+ + Interoperability and trustlessness: because ZKPs are based on mathematical proofs, an organisation or individual can trust a ZKP proof without trusting other participants.
 
 ## What are ZKP proving systems?
 
@@ -16,10 +16,10 @@ Proving systems allow to create ZKP for arbitrary computations. They are like a 
 ## What are the elements of a ZKP circuit?
 
 The main elements are:
- + The witness: which is the data of the computation. The witness is made of many elements, sometimes called signals or cells. Some signals are public and private, the public part is sometimes called the advice and the private part is sometimes called the instance. The witness usually contains the input and output of the computation, but also most or all its intermadiate values.
+ + The witness: which is the data of the computation. The witness is made of many elements, sometimes called signals or cells. Some signals are public and other private, the public part is sometimes called the **instance** and the private part is sometimes called the **advice**. The witness usually contains the input and output of the computation, but also most or all its intermediate values (the trace).
  + Setup: it is a series of constraints or assertions over the witness data, that define which computations are valid.
  + Witness generation: an algorithm that helps calculating the right values for all the signals.
- + Proving and validation key: given a setup the proving system can generate proving and validation pair of keys
+ + Proving and validation key: given a setup the proving system can generate proving and validation pair of keys. Both can be made public.
  + Proof and prover: given a setup and a witness, the prover using the proving key can generate a proof. This proof will be valid if and only if the witness follows the setup constraints.
  + Validator: given a proof and the public part of the witness and a validation key, the validator using the proving system can check that the proof is valid. That is, to generate that proof the prover had to have a witness (if which this public part is part of) that followed the setup.
 
@@ -37,7 +37,7 @@ It is a tool to write arithmetization in a more developer friendly way, but stil
 
 ## What is a ZKP high-level structured language?
 
-They allow to write the setup in a way that is closer to the way a developer thinks about the computation, and they get compiled to the arithmatization. Following the previous simil a ZKP high-level structured language is like Python.
+They allow to write the setup in a way that is closer to the way a developer thinks about the computation, and they get compiled to the arithmetization. Following the previous simile a ZKP high-level structured language is like Python.
 
 Chiquito is an example of ZKP high-level structured language that is based on steps.
 

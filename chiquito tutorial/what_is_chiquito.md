@@ -21,9 +21,9 @@ Chiquito allows the developer to think in more high-level and structured abstrac
 
 Chiquito starts from the idea that every zero knowledge proof represents a program (the setup), which can have many computations (the trace) that is proven for a certain input, output and intermediate values (the witness).
 
-The main structured abstraction in chiquito is the **step**. Any computation can be divided in individual steps. A program is represented by a circuit that has one or many **step types**, a particular computation is represented as a series of **step instances** that can have arbitrary order.
+The main structured abstraction in chiquito is the **step**. Any computation can be divided in individual steps. A program is represented by a circuit that has one or many **step types**, a particular computation is represented as a series of **step instances** or **trace steps** that can have arbitrary order.
 
-A step type constains:
+A step type contains:
  + Setup: a series of constraints or assertions that must hold for a step instance of this type to be valid.
  + Witness generation: code that for a particular input sets the values of the witness for a particular step instance.
 
@@ -31,20 +31,13 @@ A chiquito circuit contains a trace function that for a given input will generat
 
 Another important piece of Chiquito are the signals. They represent elements of the witness.
 
-There are several types:
-
- + Internal signals: they are private for a particular step, and cannot be constriants for other steps.
- + Shared signals: they are shared by all steps in the circuit, and they can be constraints for their values on relative step instances (**rotation**). For example, if "a" is a shared signal, you could assert in a step type setup that `a == a.rot(2)` which means that `a` is equial to `a` in the next of the next step (super rotation `+2`).
- + Forward signals: They are like shared signals with the restriction that they can only constrain in the current and the next step instances. For example you could assert `a == a.next()` but you could not assert `a == a.prev()`. Forward signal has the advantage of allowing for witness size optimizations.
- + Fixed signals: Their values are set during setup and cannot change.
-
-Chiquito has mmany more features, but these are enough to start writing basic circuits.
+Chiquito has many more features, but these are enough to start writing basic circuits.
 
 ## What proving system chiquito uses?
 
 Currently Halo2 backend is implemented, but we are looking into implementing other backends.
 
-Chiquito frontend comes in two flavors: rust and python, so you can write Chiquito applications in either Rust or Python. PyChiquito, and any other language interface in the future, uses ChiquitoCore for most of its work, so adding new languages is easy.
+Chiquito frontend comes in two flavours: rust and python, so you can write Chiquito applications in either Rust or Python. PyChiquito, and any other language interface in the future, uses ChiquitoCore for most of its work, so adding new languages is easy.
 
 ## What are the features of chiquito?
 
@@ -71,8 +64,9 @@ Planned:
 In research:
  + Signal typing system, which allows statically checking for soundness issues.
  + Folding backend with ProtoStar, HyperNova, and/or others.
+ + Tracers
 
-## Fibonnaci circtuit in PyChiquito.
+## Fibonacci circtuit in PyChiquito.
 
 But better see for yourself:
 

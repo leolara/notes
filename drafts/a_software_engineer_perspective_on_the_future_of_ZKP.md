@@ -1,4 +1,3 @@
-
 # A software Engineer perspective on the future of ZKP [DRAFT]
 
 I have been a software engineer in different advanced industries for more than 20 years, and recently I am happy to have done a deep change to the world of Zero Knowledge proofs. I am surrounded by other types of professionals that have been previously in my career, mostly mathematically and cryptography researchers. This is very exciting for me, as I never want to stop learning, and it is also not the first time to have jumped to a new area and find myself with people of other backgrounds, like when switching to scientific computing or in the realm of CPU development.
@@ -117,6 +116,7 @@ There is another detail I would like to touch, for the second option, should we 
 My personal favourite right now is Python, simply because it seems the most respected and widespread untyped language currently. Additional, we can see the success of AI and data science abstractions and frameworks with a Python frontend.
 
 Note that this is not a reflection about in which language the proving system or even the language has to be written, just its frontend. Many advanced python libraries are written in C, C++ or Rust.
+
 ## zk-VMs
 
 I would like to make an early distinction:
