@@ -16,6 +16,7 @@ For example:
 
 ```
 tracer callee (forward signal input a, backward output signal b) {
+	forward a;
 	step callee_first_step() {
 		/// ...
 	}
@@ -34,13 +35,21 @@ tracer callee (forward signal input a, backward output signal b) {
 }
 
 tracer caller () {
+	forward a;
 	/// ...
-	step caller_step() {
+	step caller_step() pre {
 		/// ...
 		var c = callee(a, b)
 		/// ...
+	} post {
+		
 	}
 	/// ...
+
+	pre_call()
+	callee(a, b)
+	post_call()
+	caller_step()
 }
 ```
 
@@ -52,19 +61,32 @@ The syntax can be similar to how circom creates components from templates.
 
 Chiquito should be able to compile any arbitrary boolean expression to a polynomial identity. We already drafted how to implement this.
 
-We can do this very easily if we have the "\\" operator that is the division where "a \\ 0 == 0".  Then we can eliminate the "\\" operator by creating virtual signals and an extra PI constraint, like done in the is_zero gadget.
+We can do this very easily if we have the "inv(b)" operator that is the inverse where "inv(0) == 0".  Then we can eliminate the "inv" operator by creating virtual signals and an extra PI constraint, like done in the is_zero gadget.
 
 ## Reduction of the degree of PI
 
-Once we have our PI without "\\" we can convert them to more PI but with a smaller degree automatically. This will allow us to target backends with a maximum PI degree, and also for Halo2 optimise the maximum expression degree.
+Once we have our PI without "inv" we can convert them to more PI but with a smaller degree automatically. This will allow us to target backends with a maximum PI degree, and also for Halo2 optimise the maximum expression degree.
 
 ## Front-end parser with familiar syntax
 
-We will create our own textual language with a similar syntaxt to circom. Ideally it would be a super set of circom, so any circom language would be compilable by chiquito. This language will extend circom to express chiquito abstractions like tracers, steps, forward signals, etc...
+We will create our own textual language with a similar syntax to circom. Ideally it would be a super set of circom, so any circom language would be compilable by chiquito. This language will extend circom to express chiquito abstractions like tracers, steps, forward signals, etc...
 
 ## Compatibility with rust and halo2
 
 We should maintain the possibility of combining chiquito with Halo2 circuits. For that we will have a rust DSL based on macros, that allow to introduce statements in chiquito language, while allowing to reference halo2 expressions and columns.
+
+
+```
+tracer! {
+	step! {
+		code! "
+			a === b + c
+		"
+	} 
+}
+
+```
+
 
 ## Backends
 
