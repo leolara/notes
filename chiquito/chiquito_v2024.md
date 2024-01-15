@@ -53,6 +53,55 @@ tracer caller () {
 }
 ```
 
+```
+function fibo(setup n_bits, signal forward n)(x) -> (signal b, signal n) {
+	signal a;
+	
+	#pragma first
+	step first(n_value) {
+		internal c;
+		
+		a <== 1;
+		b <== 1;
+		c <== 2; // a + b
+		n <-- n_value;
+
+		a' <== b;
+		b' <== c;
+		n' <== n;
+
+		step' === fibo_step
+	}
+
+	step fibo_step() {
+		internal c;
+		c <== a + b;
+
+		a' <== b;
+		b' <== c;
+		n' <== n;
+	}
+
+	#pragma last
+	step last() {
+	}
+
+	first(n_value);
+	var a_value = 1;
+	var b_value = 2;
+
+	var i = 1
+
+	while (i < n_value) {
+		fibo_step(a_value, b_value, n_value);
+		var prev_a = a_value;
+		a_value = b;
+		b_value = prev_a + b_value;
+	}
+	last(a, b, n_value)
+}
+```
+
 We need to think how to join the constraints between the caller and the callee. Perhaps the callee could export forward signals of the first step and backward signals of the last step , to be constraint by the caller.
 
 The syntax can be similar to how circom creates components from templates.
@@ -84,7 +133,6 @@ tracer! {
 		"
 	} 
 }
-
 ```
 
 
