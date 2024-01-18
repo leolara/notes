@@ -248,7 +248,7 @@ fn mi_elimination_recursive(
     decomp: &mut ConstrDecomp,
     constr: T,
     signal_factory: &mut SF,
-) -> Expr<F, V> {
+) -> T {
     use Expr::*;
 
     match constr {
@@ -256,7 +256,7 @@ fn mi_elimination_recursive(
         Expr::MI(se) => {
             let se_elim = mi_elimination_recursive(decomp, *se.clone(), signal_factory);
 
-            let virtual_mi = signal_factory.create("virtual_inv");
+            let virtual_mi = signal_factory.create();
             let constr_inv = Query(virtual_mi.clone());
 
             decomp.auto_signals.insert(virtual_mi.clone(), MI(se));
