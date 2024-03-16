@@ -1,6 +1,6 @@
 The goal of this is to discuss how we can help the user of chiquito to distinguish between variables used to construct the constraints and variables used to constraint the witness.
 
-There are three categories (for not using type as the type of the value they contain) in a circuit description: signals, setup variables and witness generation variables. This exists independenly of the strategy of the ZK-lang used to describe them.
+There are three categories (for not using type as the type of the value they contain) in a circuit description: signals, setup variables and witness generation variables. This exists independently of the strategy of the ZK-lang used to describe them.
 
 If we distinguish: Setup time (ST) and Witness generation time (WGT)
 
