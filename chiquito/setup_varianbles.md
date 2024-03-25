@@ -37,3 +37,21 @@ We could use the arrow `<--` operator to assign setup vars, and protest if a var
 ### Use `:=`for assign
 
 We would have `<--` for signals, `=` for wg vars and `:=` for setup vars.
+
+Example:
+
+```
+machine example() {
+	setup asetupvar: expr;
+	var awgvar: field;
+
+	state example {
+		signal asignal: bool;
+
+		asignal <- true;
+		asetupvar := asignal * 3;
+		awgvar = 10;
+	}
+}
+
+```
