@@ -46,7 +46,7 @@ I know the question if RLC is zero perhaps doesn't make much sense.
 const setup NUM_ITEMS: field = 10; // I think all consts should be setup, so perhaps "setup" can be omitted.
 
 machine example(signal input[NUM_ITEMS]: field) (signal output: field) {
-	challenge X;
+	challenge X; // or signal X: challenge; ??
 	signal intermediate[NUM_ITEMS]: field;
 	signal rlc_value;
 	signal rlc_is_zero;
