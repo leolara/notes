@@ -40,18 +40,37 @@ We would have `<--` for signals, `=` for wg vars and `:=` for setup vars.
 
 Example:
 
+I know the question if RLC is zero perhaps doesn't make much sense.
+
 ```
-machine example() {
-	setup asetupvar: expr;
-	var awgvar: field;
+const setup NUM_ITEMS: field = 10; // I think all consts should be setup, so perhaps "setup" can be omitted.
 
-	state example {
-		signal asignal: bool;
+machine example(signal input[NUM_ITEMS]: field) (signal output: field) {
+	challenge X;
+	signal intermediate[NUM_ITEMS]: field;
+	signal rlc_value;
+	signal rlc_is_zero;
 
-		asignal <- true;
-		asetupvar := asignal * 3;
-		awgvar = 10;
+	// other steps here ...
+
+	step rlc_is_zero() {
+		setup rlc_expr: expr := 1;
+		setup i: field := 0;
+		var rlc_inv_value;
+		signal rlc_inv;
+
+		while (i < NUM_ITEMS) {
+			rlc_expr := rlc_expr * X * intermediate[i];
+			i++;
+		}
+
+		rlc_value' <== rlc_expr;
+
+		rlc_inv_value = 1 \\ rlc_value';
+		rlc_inv <- rlc_inv_value;
+		
+		0 === rlc_value' * (1 - (rlc_value' * rlc_inv));
+		rlc_is_zero' === 1 - (rlc_value' * rlc_inv);
 	}
 }
-
 ```
