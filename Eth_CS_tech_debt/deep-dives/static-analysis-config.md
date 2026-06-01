@@ -39,8 +39,7 @@ the test_run runners need redesign. The pytest config has no
 `markers`, no `--strict-markers`, no `addopts`. The dependencies are
 pinned to exact versions in three flat extras groups; there is no
 `[dependency-groups]` (PEP 735) and no `[tool.uv]` block despite the
-project shipping `uv.lock`. Renovate, finally, explicitly disables
-Python upgrades on a Python project (`renovate.json:8–11`).
+project shipping `uv.lock`.
 
 The effect is a configuration file whose stated discipline and
 actual discipline disagree by two orders of magnitude. Fowler calls
@@ -86,31 +85,134 @@ ignore = [
   "PLW0603",  # global-statement
   "PLW2901",  # redefined-loop-name
 ]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ["eth_consensus_specs"]
+order-by-type = false
 ```
 
-That is the entire static-analysis policy. There is no
-`[tool.ruff.format]` block (formatter unconfigured), no
-`[tool.ruff.lint.per-file-ignores]`, no `[tool.ruff.lint.mccabe]` cap,
-no pydocstyle convention, no codespell, no vulture. Compare with
-`execution-specs/pyproject.toml:372–500` (next section) to see what a
-spec-comparable repo's policy file looks like.
+That is the static-analysis policy declared in `pyproject.toml`.
+`codespell` is also invoked from `make lint` (`Makefile:280`) but
+runs with defaults — no `[tool.codespell]` block exists. The ruff
+formatter inherits `line-length = 100` from the parent `[tool.ruff]`
+block; no explicit `[tool.ruff.format]` options are set.
+
+Two configurations are absent that would catch existing
+audit-cited findings on their own merit:
+
+- **An `[tool.ruff.lint.mccabe]` cyclomatic-complexity cap** —
+  overlaps with the silenced `PLR0912` (too-many-branches) rule
+  and surfaces the helper-layer's `is_post_<fork>` cascades and
+  `with_state_list` / test-run runner branching that
+  [helper-layer.md](helper-layer.md) enumerates by hand. The
+  mccabe cap automates that detection without the noise of the
+  other PLR09xx rules the team has explicitly silenced.
+- **`vulture` dead-code detection** — surfaces unused functions
+  and classes in files like `helpers/shard_block.py` (91 lines of
+  orphaned phase-1 implementation), which the audit catalogues by
+  hand in [secondary-findings.md](../secondary-findings.md).
+  Configuring vulture moves this class of finding from review-time
+  discovery to automated enforcement.
+
+Three further configurations are conditional or lower-priority: a
+`[tool.codespell]` block would let the project customize `skip`
+patterns and an `ignore-words-list` if the project vocabulary
+clashes with codespell's typo dictionary as it grows;
+`[tool.ruff.format]` options matter mainly for stable formatter
+behaviour across ruff version bumps (lower priority since
+`uv.lock` pins ruff); a pydocstyle convention is lower priority
+for a project whose canonical spec is markdown rather than
+docstrings.
+
+Compare with `execution-specs/pyproject.toml:372–500` (Comparable
+contrast section below) to see how a spec-comparable repo
+configures these same surfaces.
 
 ## Critique / inventory
 
 ### Type checking — `[tool.mypy]:64–70`
 
-`disallow_untyped_defs` and `disallow_incomplete_defs` (lines 65–66)
-say: every function must declare every parameter and return type.
-`warn_unused_ignores` (line 67) says: dead `# type: ignore` comments
-are errors. These three together are the canonical "strict mypy"
-posture; they're the same three lines that lead the strict block in
-`execution-specs/pyproject.toml:477–478, :480` and the same intent as
-leanSpec's `error-on-warning = true` (`leanSpec/pyproject.toml:85`).
+`pyproject.toml` declares `disallow_untyped_defs = true` and
+`disallow_incomplete_defs = true` on lines 65–66. Taken at face
+value, the project's own standard is that every function in the
+codebase must have annotations on every parameter and return.
+`warn_unused_ignores` (line 67) and `warn_redundant_casts` (line
+69) add: dead `# type: ignore` comments and pointless `cast()`
+calls are errors. These together are the canonical "strict mypy"
+posture; they match `execution-specs/pyproject.toml:477–478,
+:480` and the intent of leanSpec's `error-on-warning = true`
+(`leanSpec/pyproject.toml:85`).
 
-Then line 70: `ignore_missing_imports = true`. The shorthand
-"defeats every line above" captures the practical effect, but the
-mechanism is more subtle than literal disabling and worth slowing
-down on — the fix depends on understanding it.
+#### What mypy actually checks
+
+The Makefile (`Makefile:272–288`) builds the mypy invocation as:
+
+```makefile
+MYPY_PACKAGE_BASE := $(subst /,.,$(PYSPEC_DIR:$(CURDIR)/%=%))
+MYPY_SCOPE := $(foreach S,$(ALL_EXECUTABLE_SPEC_NAMES), -p $(MYPY_PACKAGE_BASE).eth_consensus_specs.$S)
+...
+@output="$$($(UV_RUN) mypy $(MYPY_SCOPE) 2>&1)" || { echo "$$output"; exit 1; }
+```
+
+`MYPY_SCOPE` expands to one `-p` flag per executable spec name —
+`-p tests.core.pyspec.eth_consensus_specs.phase0`,
+`-p ...altair`, and so on. Running `make lint` therefore invokes
+mypy on **six source files**: `minimal.py` and `mainnet.py` for
+each of the three forks currently in `ALL_EXECUTABLE_SPEC_NAMES`.
+Result: "Success: no issues found in 6 source files".
+
+Running mypy on the rest of the Python tree with
+`--explicit-package-bases` (necessary to bypass the
+self-referential-package-layout discovery issue — see below)
+surfaces the gap between the declared standard and the code:
+
+| Tree | Errors today | In `MYPY_SCOPE`? |
+|---|---:|---|
+| `tests/core/pyspec/.../test/helpers/` (legacy helper layer) | 503 errors in 47 files | no |
+| `tests/infra/` (in-progress framework migration) | 302 errors in 33 files | no |
+| `pysetup/` (markdown→Python extractor) | 59 errors in 14 of 19 files | no |
+| `scripts/` (standalone utilities) | 13 errors in 4 of 6 files | no |
+| Generated per-fork spec packages | 0 errors in 6 files | **yes** |
+| **Total** | **~877 errors across ~98 files** | |
+
+**By the project's own `disallow_untyped_defs = true` standard,
+those ~877 are tech debt.** They don't surface because
+`MYPY_SCOPE` exempts them.
+
+#### The self-referential-package-layout blocks mypy traversal
+
+Expanding `MYPY_SCOPE` to include the helpers isn't a simple
+edit. The package source lives inside the test tree
+(see [self-referential-package-layout.md](self-referential-package-layout.md)),
+so the same files are reachable under two dotted names. mypy
+refuses to proceed:
+
+```
+$ uv run mypy tests/core/pyspec/eth_consensus_specs/test/helpers/
+tests/core/pyspec/eth_consensus_specs/utils/ssz/ssz_impl.py: error: Source file found twice under different module names: "eth_consensus_specs.test.helpers.churn" and "tests.core.pyspec.eth_consensus_specs.test.helpers.churn"
+tests/core/pyspec/eth_consensus_specs/utils/ssz/ssz_impl.py: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#mapping-file-paths-to-modules for more info
+tests/core/pyspec/eth_consensus_specs/utils/ssz/ssz_impl.py: note: Common resolutions include:
+tests/core/pyspec/eth_consensus_specs/utils/ssz/ssz_impl.py: note:     a) adding `__init__.py` somewhere,
+tests/core/pyspec/eth_consensus_specs/utils/ssz/ssz_impl.py: note:     b) using `--explicit-package-bases` or adjusting `MYPYPATH`
+Found 1 error in 1 file (errors prevented further checking)
+```
+
+`--explicit-package-bases` is the documented workaround, but the
+underlying issue is structural: the package layout makes the type
+checker's discovery ambiguous before any annotation work begins.
+The typing gap and the package-layout gap reinforce each other —
+even if a maintainer wanted to start annotating the helpers, mypy
+can't traverse them under the current setup.
+
+#### Why the six-file slice passes — the `Any`-propagation interaction
+
+Within the six files that *are* checked, the strict directives
+pass cleanly only because `ignore_missing_imports = true` (line
+70) silences most of the third-party surface. The mechanism is
+worth understanding because removing the scope restriction
+without addressing this would still leave the directives weakened
+on the broader surface.
 
 When mypy imports a module that ships *without a `py.typed` marker*
 (the file in a package's root that says "this library has type
@@ -197,9 +299,10 @@ Two consequences worth naming:
   block whose rules contradict each other trains readers to ignore
   the file.
 
-There are no `mypy_path`, `files`, or `plugins` keys. The check has
-no defined scope — it inherits whatever `mypy <some-target>` the
-caller passes. Compare to execution-specs lines 484–485:
+`pyproject.toml` has no `mypy_path`, `files`, or `plugins` keys.
+The check's scope is whatever the Makefile passes — currently the
+six-file `-p phase0 -p altair -p ...` invocation analysed above.
+Compare to execution-specs lines 484–485:
 
 ```toml
 mypy_path = ["src", "packages/testing/src", "packages/testing/stubs"]
@@ -207,8 +310,15 @@ files = ["src", "tests", "packages"]
 ```
 
 …which both *targets* the check and *makes shadow stubs available*.
-consensus-specs has neither: there is no `stubs/` directory and no
-project-wide `make typecheck` target that asserts the same scope.
+consensus-specs has neither: no `stubs/` directory, and no
+`pyproject.toml`-declared scope that would survive a change of
+caller. Closing the ~877-error gap means three coordinated moves:
+expand `MYPY_SCOPE` (or declare `files` directly in
+`pyproject.toml`), unblock mypy's traversal by addressing the
+self-referential-package-layout issue, and replace
+`ignore_missing_imports = true` with selective per-module overrides
+plus locally-shipped stubs for the half-dozen libraries that ship
+without `py.typed`.
 
 ### Lint — `[tool.ruff.lint]:78–95`
 
@@ -224,20 +334,31 @@ The selection is `F`, `I`, `INP`, `PL`, `UP`. Spelled out:
 
 The families *not* selected, with their cost:
 
-| Family | What it catches | Where it would have fired |
-|---|---|---|
-| `E`, `W` | pycodestyle errors / warnings | Style and indentation in helpers |
-| `B` | flake8-bugbear | Common bug patterns: mutable default args, function calls in default args, useless expressions |
-| `A` | flake8-builtins | Shadowing `id`, `type`, `list` — a common pattern in spec helpers |
-| `N` | pep8-naming | Helper names that don't match Python convention (relevant given the spec uses Python and the markdown both) |
-| `D` | pydocstyle | Docstring presence and shape — the helpers have almost no docstrings |
-| `C4` | flake8-comprehensions | Unnecessary generators, list-of-set comprehensions |
-| `ARG` | flake8-unused-arguments | Pytest fixtures left in helper signatures |
-| `SIM` | flake8-simplify | `if x: return True else: return False` patterns the helpers contain |
-| `RET` | flake8-return | Inconsistent `return` shapes — a recurring helper smell |
-| `TRY` | tryceratops | Exception-handling errors |
-| `RUF` | ruff-native | Various; `RUF005` (concat) is common |
-| `PT` | flake8-pytest-style | Pytest idioms: marker shape, fixture scope, parametrize style — directly relevant |
+| Family | What it catches | Where it would have fired | Errors today |
+|---|---|---|---:|
+| `E` | pycodestyle errors | Style and indentation in helpers | 1,695 |
+| `W` | pycodestyle warnings | Trailing whitespace, no-newline-at-EOF | 0 (handled by ruff format) |
+| `B` | flake8-bugbear | Common bug patterns: mutable default args, function calls in default args, useless expressions | 321 |
+| `A` | flake8-builtins | Shadowing `id`, `type`, `list` — a common pattern in spec helpers | 90 |
+| `N` | pep8-naming | Helper names that don't match Python convention (relevant given the spec uses Python and the markdown both) | 352 |
+| `D` | pydocstyle | Docstring presence and shape — the helpers have almost no docstrings | **17,344** |
+| `C4` | flake8-comprehensions | Unnecessary generators, list-of-set comprehensions | 141 |
+| `ARG` | flake8-unused-arguments | Pytest fixtures left in helper signatures | 156 |
+| `SIM` | flake8-simplify | `if x: return True else: return False` patterns the helpers contain | 423 |
+| `RET` | flake8-return | Inconsistent `return` shapes — a recurring helper smell | 105 |
+| `TRY` | tryceratops | Exception-handling errors | 138 |
+| `RUF` | ruff-native | Various; `RUF005` (concat) is common | 292 |
+| `PT` | flake8-pytest-style | Pytest idioms: marker shape, fixture scope, parametrize style — directly relevant | 33 |
+| **Total** | | | **~21,090** |
+
+Counts produced by running `ruff check --select <FAMILY> --no-fix`
+against the same scope as `make lint` (`tests/`, `pysetup/`,
+`setup.py`). The `D` family alone — essentially every function and
+class lacking a docstring — is impossible to enable in a single PR;
+it requires either a documentation strategy or widespread per-file
+suppressions. Even the smaller families are in the low-hundreds
+each, so adopting the missing rules is a multi-PR transition
+program rather than a config edit.
 
 In particular, `PT` would have caught the unregistered custom markers
 flagged in §9 — `@pytest.mark.<something>`
@@ -370,7 +491,7 @@ Specific issues:
   miscategorised. (It also appears in `[build-system]` requires at
   line 2, which is correct.)
 
-### `[tool.uv]` and Renovate — absence and contradiction
+### `[tool.uv]` block absent
 
 - **No `[tool.uv]` block.** The repo ships `uv.lock` (visible at the
   repo root in directory listings) but the toml has no `[tool.uv]`,
@@ -381,22 +502,6 @@ Specific issues:
   workspace, git source). consensus-specs has the lockfile but not
   the policy that produces it. A maintainer running a fresh `uv sync`
   has no `required-version` floor and no documented workspace shape.
-- **Renovate disables Python upgrades — `renovate.json:7–10`.**
-
-  ```json
-  {
-    "matchDepNames": ["python"],
-    "enabled": false
-  }
-  ```
-
-  …on a project where `[project.requires-python]` is `>=3.11, <3.15`
-  (line 11) and the dependencies are all `==`-pinned. The two
-  decisions multiply: the toolchain version range is wide, the
-  upgrade machinery for that range is off, and the dependency
-  versions never move because Renovate is the only thing that would
-  move them and it's been told to leave Python alone. Hunt & Thomas
-  Tip 11 (DRY): the policy is split between two files that disagree.
 - **`.gitignore` per-fork ignores —
   `consensus-specs/.gitignore:18–27`.** Tangential to static analysis
   but worth a mention in the same survey: every fork directory is
@@ -718,9 +823,15 @@ the same number. The work splits into orthogonal tracks:
   `setuptools` out of `dependencies`. Replace `==` pinning with
   ranges for runtime dependencies; keep pinning in `lint`/`test`
   groups if developers want it (acceptable there).
-- **uv + Renovate track.** Add `[tool.uv]` with `required-version`.
-  Re-enable Renovate's Python rule and let it propose minor-version
-  bumps; review and accept.
+- **uv track.** Add `[tool.uv]` with `required-version` (so a
+  contributor's local `uv` is constrained the same way CI's is, per
+  the Type-checking section above); declare workspace shape and
+  `[tool.uv.sources]` if any. The Renovate `python` exclusion at
+  `renovate.json:8–11` is intentional (PyO3 dependencies in
+  `eth-utils` and `py-arkworks-bls12381` require per-version
+  rebuilds, so auto-bumping Python would break the build); a brief
+  comment in `renovate.json` explaining the exclusion would help
+  future maintainers.
 
 These tracks are independent. The Mypy track is the largest in
 absolute work; the Ruff track delivers the highest signal density;

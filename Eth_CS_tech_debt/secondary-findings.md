@@ -13,23 +13,11 @@ The items are grouped by the area of the codebase they touch.
 
 ## Standalone scripts (`scripts/`)
 
-Six free-standing Python scripts live under `scripts/`. The
-build-orchestration deep-dive notes that each re-implements its own
-argparse and that two are dead. Beyond the per-file smells listed
-below, most of these scripts could be replaced wholesale by
-existing tooling — pre-commit hooks, AST-based validators, or an
-mkdocs plugin entry point. Per-script substitution analysis:
-
-| Script | Replaceable by | Notes |
-|---|---|---|
-| `check_fork_comments.py` | `pre-commit` hook + `markdown-it-py` AST | The regex-against-lines approach with no code-fence awareness is a textbook case for a markdown-AST-based lint rule. |
-| `check_markdown_headings.py` | Same as above | Already shares the heading-parser issue with `pysetup/md_to_spec.py`; both could share an AST walker. |
-| `check_value_annotations.py` | `ast.parse(...)`-based validator | The `eval()` sandbox attempt is well-known not-actually-sandbox; `ast.parse(mode="eval")` plus a `NodeVisitor` is the correct shape. |
-| `fix_trailing_whitespace.py` | `pre-commit` hook (`trailing-whitespace`) | Already noted below — the pre-commit hook handles CRLF correctly, the script doesn't. |
-| `gen_kzg_trusted_setups.py` | Dead per build-orchestration | Just delete. KZG library distributions ship trusted setups directly. |
-| `gen_spec_indices.py` | `mkdocs-gen-files` plugin entry-point | Already uses `mkdocs_gen_files`; could be an `mkdocs.yml` plugin entry rather than a separately-invoked script. |
-
-The file-specific smells inside the scripts themselves follow.
+The build-orchestration deep-dive notes that each script
+re-implements its own argparse and that two are dead, and includes
+a per-script substitution-analysis table — what each script
+*should* be instead. The items below are file-specific smells
+inside the scripts themselves.
 
 ### `check_fork_comments.py` walks the entire repo on no-args invocation
 
@@ -1092,18 +1080,24 @@ items below are project-management concerns.
 
 `pyproject.toml:13–58` pins every version with `==` (e.g.
 `eth-remerkleable==0.1.30`, `setuptools==82.0.1`, `pytest==9.0.3`).
-Combined with `renovate.json:9–10` (which disables Python updates),
-the project has opted out of automated dependency management. Hunt
-& Thomas Tip 38 — the pinning prevents `uv` or `pip` from resolving
-upgrades that would otherwise be safe. Ranges (`>=8,<9`) would let
-resolvers do their job while keeping major versions controlled.
+Hunt & Thomas Tip 38 — the pinning prevents `uv` or `pip` from
+resolving upgrades that would otherwise be safe. Ranges (`>=8,<9`)
+would let resolvers do their job while keeping major versions
+controlled. Renovate (`renovate.json`) actively bumps these pinned
+versions on a weekly schedule, so the pins do move; but every
+downstream consumer of `eth-consensus-specs` inherits the
+tight-pin floor at install time.
 
-### Renovate disables Python dependency updates for a Python project
+### `renovate.json`'s Python-exclusion is undocumented
 
-`renovate.json:9–10` sets `"matchDepNames": ["python"], "enabled":
-false`, opting out of automated Python dependency management. The
-rationale isn't documented; combined with `==` pinning everywhere,
-it leaves the project to hand-bump dependencies indefinitely.
+`renovate.json:8–11` sets `"matchDepNames": ["python"], "enabled":
+false`, opting Python out of Renovate's auto-bumps. The exclusion
+is deliberate — PyO3-based dependencies (`eth-utils`,
+`py-arkworks-bls12381`) require per-version rebuilds, so an
+auto-bumped Python release breaks the build until those packages
+publish matching wheels — but the file itself doesn't say so. A
+two-line comment naming the constraint would save a future
+maintainer the research.
 
 ### `.gitignore` Shotgun Surgery for generated phases
 
@@ -1413,9 +1407,9 @@ Most items above are local cleanups with single-PR scope:
 - **Project metadata** items (`renovate.json`, `==`-pinning,
   dynamic version, `.gitattributes`, `.editorconfig`,
   `.pre-commit-config.yaml`) are dependency-management and
-  repo-hygiene decisions. The `==`-pinning + Renovate disable
-  combination should probably be revisited together rather than
-  separately.
+  repo-hygiene decisions. The `==`-pinning shape is the
+  load-bearing item here; `renovate.json`'s undocumented Python
+  exclusion is a small documentation-comment fix.
 - **Repo governance** items (`labeler.yml`, `release-drafter.yml`,
   `mkdocs.yml`, missing `ISSUE_TEMPLATE/`) are governance hygiene;
   the `labeler.yml` / `release-drafter.yml` mismatch is the most
